@@ -1,0 +1,309 @@
+hello world test<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stick Defense - 100 Levels</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a1a2e; color:#eee; font-family:'Segoe UI',sans-serif; display:flex; flex-direction:column; align-items:center; min-height:100vh; }
+#gameContainer { position:relative; display:flex; flex-direction:column; align-items:center; width:900px; }
+#hud { width:900px; display:flex; justify-content:space-between; align-items:center; background:#16213e; padding:8px 16px; border-bottom:2px solid #0f3460; font-size:14px; }
+.hud-item { display:flex; flex-direction:column; align-items:center; }
+.hud-label { font-size:10px; color:#aaa; text-transform:uppercase; }
+.hud-value { font-size:18px; font-weight:bold; color:#e94560; }
+.hud-value.gold { color:#ffd700; }
+.hud-value.hp { color:#2ecc71; }
+#canvas { border:2px solid #0f3460; cursor:crosshair; display:block; }
+#shopOverlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:100; justify-content:center; align-items:center; }
+#shopOverlay.active { display:flex; }
+#shopPanel { background:#16213e; border:2px solid #0f3460; border-radius:12px; padding:24px; width:700px; max-height:85vh; overflow-y:auto; }
+#shopPanel h2 { text-align:center; color:#e94560; margin-bottom:8px; font-size:24px; }
+#shopPanel .subtitle { text-align:center; color:#aaa; margin-bottom:20px; font-size:13px; }
+.shop-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+.shop-item { background:#0f3460; border:1px solid #1a5276; border-radius:8px; padding:14px; cursor:pointer; transition:all 0.2s; }
+.shop-item:hover:not(.disabled) { border-color:#e94560; transform:scale(1.02); }
+.shop-item.disabled { opacity:0.4; cursor:not-allowed; }
+.shop-item h3 { color:#eee; margin-bottom:4px; }
+.shop-item .desc { font-size:12px; color:#aaa; margin-bottom:8px; }
+.shop-item .cost { color:#ffd700; font-weight:bold; }
+.shop-item .dmg { color:#e74c3c; font-size:12px; }
+#continueBtn { display:block; width:100%; padding:14px; background:#e94560; color:white; border:none; border-radius:8px; font-size:18px; font-weight:bold; cursor:pointer; margin-top:8px; transition:background 0.2s; }
+#continueBtn:hover { background:#c0392b; }
+#messageBox { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(22,33,62,0.95); border:2px solid #e94560; border-radius:12px; padding:30px 50px; text-align:center; z-index:50; display:none; }
+#messageBox h2 { font-size:28px; color:#e94560; margin-bottom:12px; }
+#messageBox p { color:#ccc; margin-bottom:20px; }
+#messageBox button { padding:12px 32px; background:#e94560; color:white; border:none; border-radius:6px; font-size:16px; cursor:pointer; }
+#startScreen { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(22,33,62,0.97); display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:60; }
+#startScreen h1 { font-size:42px; color:#e94560; margin-bottom:8px; }
+#startScreen .tagline { color:#aaa; margin-bottom:30px; font-size:16px; }
+#startScreen .instructions { background:#0f3460; border-radius:8px; padding:16px 24px; margin-bottom:24px; text-align:left; font-size:14px; line-height:1.8; max-width:460px; }
+#startScreen button { padding:14px 48px; background:#e94560; color:white; border:none; border-radius:8px; font-size:20px; font-weight:bold; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+<div id="hud">
+  <div class="hud-item"><span class="hud-label">Level</span><span class="hud-value" id="hudLevel">1</span></div>
+  <div class="hud-item"><span class="hud-label">Wave</span><span class="hud-value" id="hudWave">1/1</span></div>
+  <div class="hud-item"><span class="hud-label">Base HP</span><span class="hud-value hp" id="hudHP">100</span></div>
+  <div class="hud-item"><span class="hud-label">Gold</span><span class="hud-value gold" id="hudGold">50</span></div>
+  <div class="hud-item"><span class="hud-label">Kills</span><span class="hud-value" id="hudKills">0</span></div>
+  <div class="hud-item"><span class="hud-label">Left</span><span class="hud-value" id="hudEnemies">0</span></div>
+</div>
+<canvas id="canvas" width="900" height="500"></canvas>
+<div id="startScreen">
+  <h1>&#9876; STICK DEFENSE</h1>
+  <div class="tagline">100 levels of stickman mayhem!</div>
+  <div class="instructions">
+    <b>HOW TO PLAY:</b><br>
+    Click stickmen to kill them and earn gold<br>
+    Stickmen reaching base deal 10 HP damage<br>
+    Buy defences between every level<br>
+    Archers, Cannons, Flamethrowers auto-attack<br>
+    Bosses appear every 10 levels - stay sharp!<br>
+    Survive all 100 levels to win!
+  </div>
+  <button onclick="startGame()">START GAME</button>
+</div>
+<div id="messageBox">
+  <h2 id="msgTitle"></h2>
+  <p id="msgBody"></p>
+  <button id="msgBtn">OK</button>
+</div>
+</div>
+<div id="shopOverlay">
+<div id="shopPanel">
+  <h2>END OF LEVEL <span id="shopLevel"></span></h2>
+  <div class="subtitle">Spend gold to strengthen defences! Click a tower then place on a dashed slot.</div>
+  <div class="shop-grid" id="shopGrid"></div>
+  <button id="continueBtn">Continue to Next Level &#9654;</button>
+</div>
+</div>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+const PATH=[{x:-30,y:250},{x:150,y:250},{x:150,y:120},{x:400,y:120},{x:400,y:380},{x:650,y:380},{x:650,y:180},{x:870,y:180}];
+const TDEFS={
+  archer:{name:'Archer',icon:'A',desc:'Fires arrows at enemies. Good range.',cost:50,damage:15,range:130,rate:60,col:'#27ae60',pc:'#8B4513',pr:3,ps:5,splash:false},
+  cannon:{name:'Cannon',icon:'C',desc:'Explosive splash damage. Slow fire.',cost:120,damage:40,range:110,rate:120,col:'#7f8c8d',pc:'#2c3e50',pr:6,ps:3.5,splash:true},
+  flame:{name:'Flamethrower',icon:'F',desc:'Rapid fire flames. Short range.',cost:200,damage:8,range:90,rate:15,col:'#e67e22',pc:'#e74c3c',pr:5,ps:4,splash:true},
+  sniper:{name:'Sniper',icon:'S',desc:'Extreme range. Huge single damage.',cost:300,damage:80,range:220,rate:180,col:'#2980b9',pc:'#3498db',pr:2,ps:10,splash:false},
+  tesla:{name:'Tesla Tower',icon:'T',desc:'Chain lightning, hits multiple.',cost:450,damage:35,range:120,rate:50,col:'#9b59b6',pc:'#f39c12',pr:4,ps:8,splash:true}
+};
+const UGDEFS={
+  hp50:{name:'+50 Max HP',desc:'Gain 50 max HP and heal 50.',cost:60},
+  hp100:{name:'+100 Max HP',desc:'Gain 100 max HP and heal 100.',cost:100},
+  heal:{name:'Full Heal',desc:'Restore base to full HP.',cost:80}
+};
+const SLOTS=[
+  {x:220,y:195},{x:320,y:195},{x:220,y:305},{x:320,y:305},
+  {x:475,y:195},{x:475,y:305},{x:325,y:310},
+  {x:550,y:455},{x:650,y:455},{x:750,y:455},
+  {x:550,y:105},{x:725,y:105},
+  {x:730,y:255},{x:800,y:255},
+  {x:80,y:175},{x:80,y:325}
+];
+let slots=SLOTS.map((s,i)=>({...s,id:i,occ:false}));
+let st={lv:1,gold:50,hp:100,maxhp:100,kills:0,over:false,won:false,active:false,stimer:0,sint:90,sc:0,tosp:0,ens:[],projs:[],towers:[],parts:[],placing:null,fc:0};
+
+function cfg(lv){return{n:Math.min(3+Math.floor(lv*1.5),80),hp:20+Math.floor(lv*4),spd:Math.min(0.6+lv*0.015,2.2),rew:8+Math.floor(lv*0.5)};}
+
+class En{
+  constructor(lv){
+    const c=cfg(lv);
+    this.pi=0;this.x=PATH[0].x;this.y=PATH[0].y;
+    this.hp=c.hp+Math.floor(Math.random()*10-5);this.mhp=this.hp;
+    this.spd=c.spd+Math.random()*0.1;this.rew=c.rew;
+    this.dead=false;this.done=false;this.fl=0;this.id=Math.random();this._k=false;this._d=false;
+    const cols=['#e74c3c','#e67e22','#f39c12','#8e44ad','#2980b9','#16a085'];
+    this.col=cols[Math.floor(Math.random()*cols.length)];
+    this.boss=lv%10===0;
+    if(this.boss){this.hp*=3;this.mhp=this.hp;this.spd*=0.7;this.rew*=4;}
+  }
+  upd(){
+    if(this.dead||this.done)return;
+    const t=PATH[this.pi];const dx=t.x-this.x,dy=t.y-this.y;const d=Math.sqrt(dx*dx+dy*dy);
+    if(d<this.spd){this.x=t.x;this.y=t.y;this.pi++;if(this.pi>=PATH.length){this.done=true;return;}}
+    else{this.x+=dx/d*this.spd;this.y+=dy/d*this.spd;}
+    if(this.fl>0)this.fl--;
+  }
+  drw(){
+    if(this.dead)return;
+    ctx.save();
+    const sz=this.boss?1.7:1,c=this.fl>0?'#fff':this.col;
+    const hx=this.x,hy=this.y,bw=(this.boss?40:24)*sz;
+    ctx.fillStyle='#222';ctx.fillRect(hx-bw/2,hy-30*sz,bw,5*sz);
+    ctx.fillStyle=this.hp/this.mhp>0.5?'#2ecc71':'#e74c3c';ctx.fillRect(hx-bw/2,hy-30*sz,bw*(this.hp/this.mhp),5*sz);
+    ctx.strokeStyle=c;ctx.lineWidth=2*sz;
+    ctx.beginPath();ctx.arc(hx,hy-18*sz,6*sz,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx,hy-12*sz);ctx.lineTo(hx,hy+4*sz);ctx.stroke();
+    const arm=Math.sin(st.fc*0.2+this.id*10)*8*sz;
+    ctx.beginPath();ctx.moveTo(hx-10*sz,hy-6*sz+arm);ctx.lineTo(hx+10*sz,hy-6*sz-arm);ctx.stroke();
+    const leg=Math.sin(st.fc*0.25+this.id*10)*8*sz;
+    ctx.beginPath();ctx.moveTo(hx,hy+4*sz);ctx.lineTo(hx-8*sz,hy+16*sz+leg);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(hx,hy+4*sz);ctx.lineTo(hx+8*sz,hy+16*sz-leg);ctx.stroke();
+    if(this.boss){ctx.fillStyle='#ffd700';ctx.font='bold '+(10*sz)+'px Arial';ctx.textAlign='center';ctx.fillText('BOSS',hx,hy-35*sz);}
+    ctx.restore();
+  }
+  hit(dmg){this.hp-=dmg;this.fl=6;if(this.hp<=0){this.dead=true;return true;}return false;}
+}
+
+class Proj{
+  constructor(x,y,t,def){this.x=x;this.y=y;this.t=t;this.def=def;this.dead=false;}
+  upd(){
+    if(!this.t||this.t.dead||this.t.done){this.dead=true;return;}
+    const dx=this.t.x-this.x,dy=this.t.y-this.y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<this.def.ps+2){
+      if(this.def.splash){st.ens.forEach(e=>{if(!e.dead&&!e.done&&Math.hypot(e.x-this.t.x,e.y-this.t.y)<55)if(e.hit(this.def.damage))kill(e);});}
+      else{if(this.t.hit(this.def.damage))kill(this.t);}
+      parts(this.t.x,this.t.y,this.def.pc,6);this.dead=true;
+    }else{this.x+=dx/d*this.def.ps;this.y+=dy/d*this.def.ps;}
+  }
+  drw(){ctx.save();ctx.fillStyle=this.def.pc;ctx.shadowColor=this.def.pc;ctx.shadowBlur=8;ctx.beginPath();ctx.arc(this.x,this.y,this.def.pr,0,Math.PI*2);ctx.fill();ctx.restore();}
+}
+
+class Part{
+  constructor(x,y,c){this.x=x;this.y=y;this.c=c;this.vx=(Math.random()-.5)*5;this.vy=(Math.random()-.5)*5;this.life=40;this.ml=40;this.r=2+Math.random()*2;}
+  upd(){this.x+=this.vx;this.y+=this.vy;this.vy+=0.1;this.life--;}
+  drw(){ctx.save();ctx.globalAlpha=this.life/this.ml;ctx.fillStyle=this.c;ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();ctx.restore();}
+}
+
+function parts(x,y,c,n){for(let i=0;i<n;i++)st.parts.push(new Part(x,y,c));}
+function kill(e){if(e._k)return;e._k=true;st.gold+=e.rew;st.kills++;parts(e.x,e.y,'#ffd700',8);hud();}
+
+class Tower{
+  constructor(def,slot){this.def=def;this.slot=slot;this.x=slot.x;this.y=slot.y;this.cd=0;}
+  upd(){
+    if(this.cd>0){this.cd--;return;}
+    let t=null,md=Infinity;
+    st.ens.forEach(e=>{if(e.dead||e.done)return;const d=Math.hypot(e.x-this.x,e.y-this.y);if(d<this.def.range&&d<md){md=d;t=e;}});
+    if(t){st.projs.push(new Proj(this.x,this.y,t,this.def));this.cd=this.def.rate;}
+  }
+  drw(){
+    ctx.save();ctx.fillStyle=this.def.col;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(this.x,this.y,13,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(this.def.icon,this.x,this.y);ctx.restore();
+  }
+}
+
+function drawBG(){
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0d1117');g.addColorStop(1,'#161b22');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#1a3a1a';
+  ctx.fillRect(0,0,W,100);ctx.fillRect(0,290,160,H-290);
+  ctx.fillRect(170,145,215,120);ctx.fillRect(420,145,215,205);
+  ctx.fillRect(420,415,445,85);ctx.fillRect(670,210,75,145);ctx.fillRect(670,0,225,150);
+}
+function drawPath(){
+  ctx.save();
+  ctx.strokeStyle='#5D4037';ctx.lineWidth=38;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  ctx.strokeStyle='#795548';ctx.lineWidth=34;
+  ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  ctx.strokeStyle='rgba(255,220,80,0.2)';ctx.lineWidth=2;ctx.setLineDash([8,8]);
+  ctx.beginPath();PATH.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  ctx.setLineDash([]);ctx.restore();
+}
+function drawBase(){
+  const bx=870,by=180;ctx.save();
+  ctx.fillStyle='#263238';ctx.strokeStyle='#546E7A';ctx.lineWidth=2;
+  ctx.fillRect(bx-22,by-30,44,40);ctx.strokeRect(bx-22,by-30,44,40);
+  for(let i=0;i<3;i++){ctx.fillStyle='#37474F';ctx.fillRect(bx-18+i*14,by-38,10,10);ctx.strokeRect(bx-18+i*14,by-38,10,10);}
+  ctx.fillStyle='#6D4C41';ctx.fillRect(bx-8,by+2,16,8);
+  ctx.strokeStyle='#ef5350';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bx,by-30);ctx.lineTo(bx,by-48);ctx.stroke();
+  ctx.fillStyle='#ef5350';ctx.beginPath();ctx.moveTo(bx,by-48);ctx.lineTo(bx+12,by-42);ctx.lineTo(bx,by-36);ctx.fill();
+  const p=st.hp/st.maxhp,col=p>0.5?'#4CAF50':p>0.25?'#FFC107':'#f44336';
+  ctx.fillStyle='#333';ctx.fillRect(bx-25,by+14,50,8);
+  ctx.fillStyle=col;ctx.fillRect(bx-25,by+14,50*p,8);
+  ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(bx-25,by+14,50,8);
+  ctx.restore();
+}
+function drawSlots(){
+  slots.forEach(s=>{if(!s.occ){ctx.save();ctx.strokeStyle='rgba(100,200,255,0.25)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.arc(s.x,s.y,13,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.restore();}});
+}
+function hud(){
+  document.getElementById('hudLevel').textContent=st.lv;
+  document.getElementById('hudHP').textContent=st.hp+'/'+st.maxhp;
+  document.getElementById('hudGold').textContent=st.gold;
+  document.getElementById('hudKills').textContent=st.kills;
+  const al=st.ens.filter(e=>!e.dead&&!e.done).length;
+  document.getElementById('hudEnemies').textContent=Math.max(0,(st.tosp-st.sc)+al);
+  const hp=document.getElementById('hudHP');const p=st.hp/st.maxhp;
+  hp.style.color=p>0.5?'#2ecc71':p>0.25?'#f39c12':'#e74c3c';
+}
+function loop(){
+  if(st.over||st.won)return;
+  st.fc++;
+  if(st.active&&st.sc<st.tosp){st.stimer++;if(st.stimer>=st.sint){st.ens.push(new En(st.lv));st.sc++;st.stimer=0;}}
+  st.ens.forEach(e=>e.upd());st.towers.forEach(t=>t.upd());st.projs.forEach(p=>p.upd());st.parts.forEach(p=>p.upd());
+  st.ens.forEach(e=>{if(e.done&&!e._d){e._d=true;const dmg=e.boss?20:10;st.hp=Math.max(0,st.hp-dmg);if(st.hp<=0){end(false);return;}hud();}});
+  st.ens=st.ens.filter(e=>!(e.dead||(e.done&&e._d)));
+  st.projs=st.projs.filter(p=>!p.dead);
+  st.parts=st.parts.filter(p=>p.life>0);
+  if(st.active&&st.sc>=st.tosp&&st.ens.length===0){st.active=false;setTimeout(shop,800);}
+  hud();
+  drawBG();drawPath();drawSlots();
+  st.towers.forEach(t=>t.drw());st.ens.forEach(e=>e.drw());st.projs.forEach(p=>p.drw());st.parts.forEach(p=>p.drw());
+  drawBase();
+  ctx.save();ctx.font='bold 13px Segoe UI';ctx.fillStyle='rgba(255,255,255,0.45)';ctx.textAlign='left';
+  ctx.fillText('Click stickmen to kill! Level '+st.lv+' / 100',8,20);ctx.restore();
+  requestAnimationFrame(loop);
+}
+function shop(){
+  document.getElementById('shopLevel').textContent=st.lv;
+  const grid=document.getElementById('shopGrid');grid.innerHTML='';
+  Object.entries(TDEFS).forEach(([key,def])=>{
+    const d=document.createElement('div');
+    d.className='shop-item'+(st.gold<def.cost?' disabled':'');
+    d.innerHTML='<h3>'+def.name+'</h3><div class="desc">'+def.desc+'</div><div class="cost">Cost: '+def.cost+' gold</div><div class="dmg">Damage: '+def.damage+' | Range: '+def.range+'</div>';
+    d.onclick=()=>{if(st.gold>=def.cost){st.placing=key;document.getElementById('shopOverlay').classList.remove('active');msg('Place Tower','Click a dashed slot on the map to place your '+def.name+'!',()=>document.getElementById('shopOverlay').classList.add('active'));}};
+    grid.appendChild(d);
+  });
+  Object.entries(UGDEFS).forEach(([key,def])=>{
+    const d=document.createElement('div');
+    d.className='shop-item'+(st.gold<def.cost?' disabled':'');
+    d.innerHTML='<h3>'+def.name+'</h3><div class="desc">'+def.desc+'</div><div class="cost">Cost: '+def.cost+' gold</div>';
+    d.onclick=()=>{if(st.gold>=def.cost){st.gold-=def.cost;if(key==='hp50'){st.maxhp+=50;st.hp=Math.min(st.hp+50,st.maxhp);}else if(key==='hp100'){st.maxhp+=100;st.hp=Math.min(st.hp+100,st.maxhp);}else if(key==='heal'){st.hp=st.maxhp;}hud();shop();}};
+    grid.appendChild(d);
+  });
+  document.getElementById('shopOverlay').classList.add('active');
+}
+document.getElementById('continueBtn').onclick=()=>{
+  document.getElementById('shopOverlay').classList.remove('active');st.placing=null;
+  st.lv++;if(st.lv>100){end(true);return;}lvl();
+};
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  if(st.placing){
+    const def=TDEFS[st.placing];
+    const sl=slots.find(s=>!s.occ&&Math.hypot(s.x-mx,s.y-my)<20);
+    if(sl&&st.gold>=def.cost){st.gold-=def.cost;sl.occ=true;st.towers.push(new Tower(def,sl));st.placing=null;hud();document.getElementById('shopOverlay').classList.add('active');}
+    return;
+  }
+  st.ens.forEach(e=>{if(e.dead||e.done)return;if(Math.hypot(e.x-mx,e.y-my)<18*(e.boss?1.7:1)){if(e.hit(30))kill(e);parts(e.x,e.y,'#ff6b6b',5);}});
+});
+function msg(title,body,cb){
+  document.getElementById('msgTitle').textContent=title;document.getElementById('msgBody').textContent=body;
+  document.getElementById('messageBox').style.display='block';
+  document.getElementById('msgBtn').onclick=()=>{document.getElementById('messageBox').style.display='none';if(cb)cb();};
+}
+function lvl(){
+  const c=cfg(st.lv);
+  st.ens=[];st.projs=[];st.parts=[];st.sc=0;st.stimer=0;
+  st.tosp=c.n;st.sint=Math.max(18,90-st.lv);st.active=true;hud();
+}
+function startGame(){
+  document.getElementById('startScreen').style.display='none';
+  st={lv:1,gold:50,hp:100,maxhp:100,kills:0,over:false,won:false,active:false,stimer:0,sint:90,sc:0,tosp:0,ens:[],projs:[],towers:[],parts:[],placing:null,fc:0};
+  slots.forEach(s=>s.occ=false);lvl();requestAnimationFrame(loop);
+}
+function end(won){
+  st.over=!won;st.won=won;
+  won?msg('YOU WIN! Congratulations!','You survived all 100 levels! Total kills: '+st.kills,()=>location.reload()):msg('GAME OVER','Base destroyed on level '+st.lv+'. Kills: '+st.kills,()=>location.reload());
+}
+</script>
+</body>
+</html>
